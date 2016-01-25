@@ -8,7 +8,7 @@ var driver = new webdriver.Builder().
 
 driver.get('http://localhost:4567');
 
-driver.sleep(5000);
+driver.sleep(1000);
 
 driver.findElement(webdriver.By.css('#thetext')).getText().then(function(text) {
   console.log(text);

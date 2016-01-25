@@ -984,28 +984,36 @@ function patchEventTargetMethods(obj) {
   // This is required for the addEventListener hook on the root zone.
   obj[keys.common.addEventListener] = obj.addEventListener;
   obj.addEventListener = function (eventName, handler, useCapturing) {
-    //Ignore special listeners of IE11 & Edge dev tools, see https://github.com/angular/zone.js/issues/150
-    if (handler && handler.toString() !== "[object FunctionWrapper]") {
-      var eventType = eventName + (useCapturing ? '$capturing' : '$bubbling');
-      var fn;
-      if (handler.handleEvent) {
-        // Have to pass in 'handler' reference as an argument here, otherwise it gets clobbered in
-        // IE9 by the arguments[1] assignment at end of this function.
-        fn = (function(handler) {
-          return function() {
-            handler.handleEvent.apply(handler, arguments);
-          };
-        })(handler);
-      } else {
-        fn = handler;
+    try {
+      //Ignore special listeners of IE11 & Edge dev tools, see https://github.com/angular/zone.js/issues/150
+      if (handler && handler.toString() !== "[object FunctionWrapper]") {
+        var eventType = eventName + (useCapturing ? '$capturing' : '$bubbling');
+        var fn;
+        if (handler.handleEvent) {
+          // Have to pass in 'handler' reference as an argument here, otherwise it gets clobbered in
+          // IE9 by the arguments[1] assignment at end of this function.
+          fn = (function(handler) {
+            return function() {
+              handler.handleEvent.apply(handler, arguments);
+            };
+          })(handler);
+        } else {
+          fn = handler;
+        }
+
+        handler[originalFnKey] = fn;
+        handler[boundFnsKey] = handler[boundFnsKey] || {};
+        handler[boundFnsKey][eventType] = handler[boundFnsKey][eventType] || zone.bind(fn);
+        arguments[1] = handler[boundFnsKey][eventType];
       }
-
-      handler[originalFnKey] = fn;
-      handler[boundFnsKey] = handler[boundFnsKey] || {};
-      handler[boundFnsKey][eventType] = handler[boundFnsKey][eventType] || zone.bind(fn);
-      arguments[1] = handler[boundFnsKey][eventType];
+    } catch (e) {
+      if (e.message && e.message.indexOf("Permission denied to access property" !== -1)) {
+        // Intentionally do nothing, this error comes from Firefox and means that the
+        // event listener originated in an add-on content script.
+      } else {
+        throw e;
+      }
     }
-
     // - Inside a Web Worker, `this` is undefined, the context is `global` (= `self`)
     // - When `addEventListener` is called on the global context in strict mode, `this` is undefined
     // see https://github.com/angular/zone.js/issues/190
